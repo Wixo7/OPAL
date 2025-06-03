@@ -6,8 +6,8 @@ library(scales)
 setwd(this.dir())
 
 # loading the data
-nodes <- read.csv2('author_nodes.csv')
-edges <- read.csv2('author_edges.csv')
+nodes <- read.csv2('author_nodes_new.csv')
+edges <- read.csv2('author_edges_new.csv')
 nodes <- na.omit(nodes)
 edges <- na.omit(edges)
 nodes <- nodes %>% distinct(author_id, .keep_all=TRUE)
@@ -18,24 +18,21 @@ nodes$author_id <- as.character(nodes$author_id)
 edges$from <- as.character(edges$from)
 edges$to <- as.character(edges$to)
 
-colnames(nodes)[colnames(nodes) == "author_id"] <- "id"
-
-edges <- edges %>%
-  rowwise() %>%
-  mutate(pair = paste(sort(c(from, to)), collapse = "_")) %>%
-  ungroup() %>%
-  group_by(pair) %>%
-  summarise(
-    from = strsplit(pair, "_")[[1]][1],
-    to = strsplit(pair, "_")[[1]][2],
-    freq = sum(freq),
-    .groups = "drop"
-  )
+#edges <- edges %>%
+#  rowwise() %>%
+#  mutate(pair = paste(sort(c(from, to)), collapse = "_")) %>%
+#  ungroup() %>%
+#  group_by(pair) %>%
+#  summarise(
+#    from = strsplit(pair, "_")[[1]][1],
+#    to = strsplit(pair, "_")[[1]][2],
+#    freq = sum(freq),
+#    .groups = "drop"
+# )
 
 # creating a tooltip
 newTitle = paste0("Name: ", nodes$label,
-                  "<br>Publications: ", nodes$publications)
-                  #"<br>Salary: €", nodes$salary)
+                  "<br>Publications: ", nodes$pubs)
 nodes$title <- newTitle
 
 # UI
@@ -47,13 +44,9 @@ ui <- fluidPage(
   sidebarLayout(
     sidebarPanel(
       selectInput("selected_node", "Select a node:", choices = nodes$label),
-      #radioButtons("aca_title", "Academic Title:",
-      #             c("All" = "all",
-      #               "Professor" = "pro",
-      #               "PhD" = "doc")),
-      sliderInput("publications", "Max Publications:",
-                  min = min(nodes$publications), max = max(nodes$publications),
-                  value = max(nodes$publications)),
+      sliderInput("pubs", "Max Publications:",
+                  min = min(nodes$pubs), max = max(nodes$pubs),
+                  value = max(nodes$pubs)),
     ),
     mainPanel(
       visNetworkOutput("filteredGraph", height = "500px")
@@ -95,18 +88,14 @@ server <- function(input, output, session) {
     #}
     
     # salary filtering
-    filtered_nodes <- subset(filtered_nodes, publications <= input$publications)
+    filtered_nodes <- subset(filtered_nodes, pubs <= input$pubs)
   
     # post-filter network binding
     filtered_nodes <- rbind(filtered_nodes, primary_node)
     
-    # grouping
-    #filtered_nodes$group <- filtered_nodes$type
-    
     # labeling
-    #filtered_nodes$label <- filtered_nodes$name
     all_edges$width <- scales::rescale(all_edges$freq, to = c(1, 10))
-    all_edges$title <- paste("Collaborations:", all_edges$freq)
+    all_edges$title <- paste("Collaborations:", all_edges $freq)
     
     # drawing the graph
     visNetwork(nodes = filtered_nodes, edges = all_edges) %>%
@@ -120,5 +109,3 @@ server <- function(input, output, session) {
 
 
 shinyApp(ui = ui, server = server)
-
-#Andrea Potz
