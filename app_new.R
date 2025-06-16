@@ -3,13 +3,17 @@ library(visNetwork)
 library(this.path)
 library(dplyr)
 library(scales)
+#library(operators)
 setwd(this.dir())
+
+`%nin%` = Negate(`%in%`)
 
 # loading the data
 nodes <- read.csv2('author_nodes_new.csv')
 edges <- read.csv2('author_edges_new.csv')
-nodes <- na.omit(nodes)
-edges <- na.omit(edges)
+institutions <- readRDS("downloaded_institutions_combined.rds")
+#nodes <- na.omit(nodes)
+#edges <- na.omit(edges)
 nodes <- nodes %>% distinct(author_id, .keep_all=TRUE)
 
 colnames(edges) <- c('from', 'to', 'freq')
@@ -17,6 +21,42 @@ colnames(edges) <- c('from', 'to', 'freq')
 nodes$author_id <- as.character(nodes$author_id)
 edges$from <- as.character(edges$from)
 edges$to <- as.character(edges$to)
+
+n <- nrow(institutions)
+new_institutions <- institutions[!c(FALSE, rowMeans(institutions[-1, ] == institutions[-n, ]) == 1), ]
+fixed_institutions <- new_institutions[which(new_institutions$name %in% nodes$label),]
+fixed_institutions <- fixed_institutions[!duplicated(fixed_institutions[c('name')]), ]
+
+external_names <- nodes[grepl("^EXT_", nodes$id),]$label
+external_institutions <- data.frame(name = external_names)
+external_institutions <- merge(external_institutions, fixed_institutions, by = "name")
+external_names_rest <- nodes[grepl("^EXT_", nodes$id),]$label[external_names %nin% external_institutions$name]
+external_rest_c <- numeric(length(external_names_rest))
+external_rest_i <- numeric(length(external_names_rest))
+external_institutions_rest <- data.frame(name = external_names_rest, countries = external_rest_c, institutions = external_rest_i)
+external_institutions_final <- rbind(external_institutions, external_institutions_rest)
+
+internal_names <- nodes[grepl("^A_", nodes$id),]$label
+institutions_var <- numeric(length(internal_names))
+countries_var <- numeric(length(internal_names))
+internal_institutions <- data.frame(name = internal_names, countries = countries_var, institutions = institutions_var)
+internal_institutions$countries <- "AT"
+internal_institutions$institutions <- "Vienna University of Economics and Business"
+
+final_institutions <- rbind(internal_institutions, external_institutions_final)
+final_institutions$countries[which(final_institutions$countries == 0)] <- "Unknown"
+final_institutions$institutions[which(final_institutions$institutions == 0)] <- "Unknown"
+
+colnames(final_institutions) <- c('label', 'countries', 'institutions')
+
+nodes <- merge(nodes, final_institutions, by = "label")
+#nodes$institutions[which(nodes$university == "Vienna University of Economics and Business")] <- "Vienna University of Economics and Business"
+#nodes$countries[which(nodes$university == "Vienna University of Economics and Business")] <- "AT"
+
+#nodes <- nodes[!duplicated(nodes[c('id')]), ]
+
+nodes <- nodes %>% distinct(author_id, .keep_all=TRUE)
+nodes <- arrange(nodes, author_id)
 
 #edges <- edges %>%
 #  rowwise() %>%
@@ -32,7 +72,9 @@ edges$to <- as.character(edges$to)
 
 # creating a tooltip
 newTitle = paste0("Name: ", nodes$label,
-                  "<br>Publications: ", nodes$pubs)
+                  "<br>Publications: ", nodes$pubs,
+                  "<br>Country: ", nodes$countries,
+                  "<br>Institution: ", nodes$institutions)
 nodes$title <- newTitle
 
 # UI
