@@ -7,13 +7,25 @@ setwd(this.dir())
 
 `%nin%` = Negate(`%in%`)
 
+clean_name <- function(x) {
+  x <- tolower(x)
+  x <- gsub("[^a-z0-9\\s-]", "", x)
+  x <- gsub("\\s+", " ", x)
+  x <- trimws(x)               
+  return(x)
+}
+
 # loading the data
 nodes <- read.csv2('author_nodes_new.csv')
 edges <- read.csv2('author_edges_new.csv')
 institutions <- readRDS("downloaded_institutions_combined.rds")
+qsranking <- read.csv("qsranking.csv")
+qsranking <- subset(qsranking, select = c(index, rank_2025, rank_2024, institution_name, location))
+qsranking$location <- countrycode(qsranking$location, origin = "country.name.en", destination = "iso2c")
 
 nodes$author_id <- as.character(nodes$author_id)
 colnames(edges) <- c('from', 'to', 'freq')
+colnames(qsranking) <- c('index', 'rank_2025', 'rank_2024', 'institutions', 'location')
 edges$from <- as.character(edges$from)
 edges$to <- as.character(edges$to)
 
@@ -41,6 +53,29 @@ nodes <- nodes[nodes$label != "NA NA",]
 nodes <- merge(nodes, final_institutions, by = c("id", "label"))
 
 nodes <- nodes %>% distinct(author_id, .keep_all=TRUE)
+
+#qs implementation
+nodes_qsranking <- subset(nodes, select = c(id, institutions, countries))
+
+nodes_qsranking$institutions <- clean_name(nodes_qsranking$institutions)
+qsranking$institutions <- clean_name(qsranking$institutions)
+
+result <- stringdist_left_join(nodes_qsranking, qsranking, by = "institutions", method = "jw", max_dist = 0.2, distance_col='dist')
+result <- result %>% group_by(id) %>% filter(countries == location | countries == "Unknown") %>% slice(which.min(dist))
+rm(nodes_qsranking)
+
+#cleaning qsranking results
+result$rank_2025 <- gsub('[+]', '', result$rank_2025)
+result$rank_2024 <- gsub('[+]', '', result$rank_2024)
+result$rank_2025_num <- as.numeric(sapply(strsplit(result$rank_2025, c('-')), "[[", 1))
+result$rank_2024_num <- as.numeric(sapply(result$rank_2024, function(x) {
+  strsplit(x, '-')[[1]][1]
+}))
+
+#merging the cleaned results with nodes
+result$rank <- (result$rank_2025_num + result$rank_2024_num)/2
+result <- result[,c(1,12)]
+nodes <- left_join(nodes, result, by = 'id')
 
 #n <- nrow(institutions)
 #new_institutions <- institutions[!c(FALSE, rowMeans(institutions[-1, ] == institutions[-n, ]) == 1), ]
@@ -76,7 +111,8 @@ edges <- edges %>%
 newTitle = paste0("Name: ", nodes$label,
                   "<br>Publications: ", nodes$pubs,
                   "<br>Country: ", nodes$countries,
-                  "<br>Institution: ", nodes$institutions)
+                  "<br>Institution: ", nodes$institutions,
+                  "<br>Ranking: ", nodes$rank)
 nodes$title <- newTitle
 
 # UI
@@ -91,6 +127,9 @@ ui <- fluidPage(
       sliderInput("pubs", "Max Publications:",
                   min = min(nodes$pubs), max = max(nodes$pubs),
                   value = max(nodes$pubs)),
+      sliderInput("rank", "Max Rank:",
+                  min = min(na.omit(nodes$rank)), max = max(na.omit(nodes$rank)),
+                  value = max(na.omit(nodes$rank))),
     ),
     mainPanel(
       visNetworkOutput("filteredGraph", height = "500px")
@@ -131,8 +170,11 @@ server <- function(input, output, session) {
     #filtered_nodes <- subset(filtered_nodes, type == input$aca_title)
     #}
     
-    # salary filtering
+    # publication filtering
     filtered_nodes <- subset(filtered_nodes, pubs <= input$pubs)
+    
+    # ranking filtering
+    filtered_nodes <- subset(filtered_nodes, rank <= input$rank | is.na(rank))
   
     # post-filter network binding
     filtered_nodes <- rbind(filtered_nodes, primary_node)
@@ -143,6 +185,22 @@ server <- function(input, output, session) {
     
     # drawing the graph
     visNetwork(nodes = filtered_nodes, edges = all_edges) %>%
+      visLayout(randomSeed = 1) %>%
+      visPhysics(
+        solver = "forceAtlas2Based",
+        forceAtlas2Based = list(
+          gravitationalConstant = -60,
+          centralGravity        = 0.015,
+          springLength          = 230,
+          springConstant        = 0.08
+        ),
+        stabilization = FALSE
+      ) %>%
+      # Auto-fit once the network is stabilised
+      visEvents(
+        stabilizationIterationsDone =
+          "function () { this.fit({animation:false}); }"
+      ) %>%
       addFontAwesome(name = "font-awesome", version = c("4.7.0", "5.13.0")) %>%
       visGroups(groupname = "pro", shape = "icon", 
                 icon = list(code = "f007", size = 50, color = "steelblue")) %>%
