@@ -328,6 +328,11 @@ server <- function(input, output, session) {
     if (input$net_mode=="Institution network") {
       # keep one central node + one per partner institution
       main_node <- pn
+      
+      fn <- fn %>% filter(pubs <= input$pubs_filter)
+      fn <- fn %>% filter(continent %in% input$cont_filter)
+      fn <- fn %>% filter(rank <= input$rank_filter | is.na(rank))
+      
       inst_nodes <- fn[fn$id!=ego_id,] %>%
         distinct(institutions,.keep_all=TRUE) %>%
         mutate(
