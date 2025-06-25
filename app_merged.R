@@ -198,11 +198,7 @@ ui <- fluidPage(
       #sliderInput("rank", "Max Rank:",
       #            min = min(na.omit(nodes$rank)), max = max(na.omit(nodes$rank)),
       #            value = max(na.omit(nodes$rank))),
-      checkboxGroupInput(
-        "cont_filter", "Show continents:",
-        choices  = sort(unique(nodes$continent)),
-        selected = sort(unique(nodes$continent))
-      )
+      uiOutput("cont_checkbox")
     ),
     mainPanel(
       conditionalPanel("input.view_mode=='Author view'",
@@ -244,6 +240,17 @@ server <- function(input, output, session) {
     }
   })
   
+  output$cont_checkbox <- renderUI({
+    req(input$view_mode=="Author view", input$selected_node)
+    checkboxGroupInput(
+      "cont_filter", "Show continents:",
+      choices  = sort(unique(nodes$continent)),
+      selected = sort(unique(nodes$continent))
+    )
+  })
+  
+
+  
   # -- institution rank filter (author view only) --
   output$rank_slider <- renderUI({
     req(input$view_mode=="Author view", input$selected_node)
@@ -259,7 +266,7 @@ server <- function(input, output, session) {
     ce     <- subset(edges, from==ego_id|to==ego_id)
     ids    <- unique(c(ce$from,ce$to,ego_id))
     insts  <- nodes %>% filter(id%in%ids) %>% pull(institutions) %>% unique()
-    checkboxGroupInput("inst_filter","Show institutes:",
+    checkboxGroupInput("inst_filter","Show institutions:",
                        choices=insts, selected=insts)
   })
   
