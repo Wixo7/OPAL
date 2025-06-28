@@ -1,0 +1,125 @@
+---
+title: "Report Markdown"
+format: pdf
+editor: visual
+---
+
+## The script to download OpenAlex data
+
+The first script is used to obtain the author names for the purpose of searching them in the OpenAlex database. This is done as there is no specific identifier in the PURE database linking the researchers to OpenAlex. This will present a problem with duplicate names that will get resolved by matching the researchers' output with the output in PURE.
+
+```{r eval = FALSE}
+external_names <- nodes[grepl("^EXT_", nodes$id),]
+
+author_name <- external_names$label
+
+author_name <- author_name[author_name != "NA NA"]
+
+saveRDS(author_name, file = "author_name.rds")
+```
+
+The main script was a loop that run the logic over 1000 researcher names at a time. This was done in order to limit the possibility of a problem occurring and losing the pulled API data.
+
+The script requires the papers (which are all PURE papers available) and the previously created author_name file.
+
+Then, the url for the API is specified and the vectors used to store downloaded data are initialized.
+
+```{r eval = FALSE}
+library(httr)
+library(jsonlite)
+
+papers <- readRDS("papers.rds")
+author_name <- readRDS("author_name.rds")
+
+author_name <- author_name[1:1000]
+
+search_name <- URLencode(author_name, reserved = TRUE)
+search_url <- paste0("https://api.openalex.org/authors?search=", search_name)
+
+countries <- numeric(length(author_name))
+uni <- numeric(length(author_name))
+
+for (i in 1:length(search_url)) {
+  response <- GET(search_url[i])
+  search_results <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
+  res <- search_results$results
+  
+  results_for_name <- list()
+  
+  if (is.data.frame(res) && nrow(res) != 0) {
+    for (j in 1:nrow(res)) {
+      results_for_name[[length(results_for_name)+1]] <- fromJSON(content(GET(res$works_api_url[j]), as = "text", encoding = "UTF-8"))$results
+    }
+  } else {
+    results_for_name[[length(results_for_name)+1]] <- NA
+  }
+  
+  for (h in 1:length(results_for_name)) {
+    if(length(res) != 0) {
+      if(length(which(results_for_name[[h]]$title %in% papers$title.value)) != 0) {
+        if(length(res$last_known_institutions[[h]]$display_name) != 0) {
+          uni[i] <- (res$last_known_institutions[[h]]$display_name[1])
+          countries[i] <- (res$last_known_institutions[[h]]$country_code[1])
+        }
+        else{
+          uni[i] <- 0
+          countries[i] <- 0
+        }
+        break
+      }
+    }
+  }
+  
+  rm(results_for_name)
+  
+}
+
+downloaded_institutions <- data.frame(name = author_name, countries = countries, institutions = uni)
+
+saveRDS(downloaded_institutions, file = "downloaded_institutions_1_100_test.rds")
+```
+
+To break down the logic of the main loop, the specific sub-loops will be explained
+
+```{r eval = FALSE}
+response <- GET(search_url[i])
+search_results <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
+res <- search_results$results
+```
+
+This chunk is responsible for the download of all profiles on OpenAlex that match the provided name. The result for this is a dataframe with the nrow equal to the number of profiles retrieved.
+
+```{r eval = FALSE}
+  results_for_name <- list()
+  if (is.data.frame(res) && nrow(res) != 0) {
+    for (j in 1:nrow(res)) {
+      results_for_name[[length(results_for_name)+1]] <- fromJSON(content(GET(res$works_api_url[j]), as = "text", encoding = "UTF-8"))$results
+    }
+  } else {
+    results_for_name[[length(results_for_name)+1]] <- NA
+  }
+```
+
+The next chunk is in charge of retrieving all articles available on OpenAlex written by all profiles that were retrieved in the previous step. The output is in the form of a list.
+
+```{r eval = FALSE}
+  for (h in 1:length(results_for_name)) {
+    if(length(res) != 0) {
+      if(length(which(results_for_name[[h]]$title %in% papers$title.value)) != 0) {
+        if(length(res$last_known_institutions[[h]]$display_name) != 0) {
+          uni[i] <- (res$last_known_institutions[[h]]$display_name[1])
+          countries[i] <- (res$last_known_institutions[[h]]$country_code[1])
+        }
+        else{
+          uni[i] <- 0
+          countries[i] <- 0
+        }
+        break
+      }
+    }
+  }
+```
+
+The final loop is responsible for actually finding the institution of the researcher. It first runs through all of the outputs for each profile. It searches for the first profile index that contains an output that is available in the PURE data set. This is a way to ensure that the researcher is question is the specific researcher contained in PURE and not just a person with the same name. Then, after this has been identified, it retrieves the information about the institution and the country of the chosen profile and that concludes the entire step of the loop. The same process was then repeated for all available names.
+
+After data, the vectors are merged into a dataframe and then saved in a .RDS file for further use.
