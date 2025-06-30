@@ -1,0 +1,1023 @@
+---
+output:
+  pdf_document:
+    latex_engine: pdflatex
+    keep_tex: true
+    toc: false
+    toc_depth: 2
+    number_sections: true
+header-includes:
+  - \usepackage{setspace}
+  - \setstretch{1.5}
+--- 
+
+```{=latex}
+\begin{titlepage}
+  \centering
+  \vspace*{4cm}
+
+  {\Huge \textbf{Final Project Report}\par}
+  \vspace{1cm}
+  {\Large Interactive Dashboard for WU’s Collaborative Research Network\par}
+  \vspace{0.5cm}
+  {\large March 2025 – June 2025\par}
+
+  \vspace{4.5cm}
+
+  \begin{flushleft}
+  {\normalsize
+  \textbf{Supervisor:} Prof. Dr. Axel Polleres \\
+  \textbf{Data Coach:} Dr. Daniel Szöllösi \\
+  }
+
+  \vspace{1.5cm}
+
+  {\normalsize
+  \textbf{Team Members:} \\
+  \vspace{0.5cm}
+  \begin{tabular}{@{}lll@{}}
+    Wiktor Michal Uszko      & h12230994  & h12230994@s.wu.ac.at \\
+    Bolormaa Munkh-Erdene    & h12233157  & h12233157@s.wu.ac.at \\
+    Julius Leopold Moosmann  & h12209031  & h12209031@s.wu.ac.at \\
+  \end{tabular}
+  }
+  \end{flushleft}
+
+  \vfill
+\end{titlepage}
+```
+
+\newpage 
+
+```{=latex}
+\tableofcontents
+```
+
+\newpage
+\section*{Abstract}
+
+In the increasingly global landscape of research, it is important to understand and be able to visualize collaborative work of researchers in order to support interdisciplinary work and to improve visibility of institutions. At WU Vienna, the PURE system provides internal research metadata, but it lacks the functionalities for interactive exploration and benchmarking data globally. In our project, we try to address and improve on some of these limitations by developing an interactive R Shiny application that is designed to map and visualize research collaboration networks. This application, which we termed as OPAL (Overhauled, PURE, Access, Library), is made by using internal PURE data, and is enriched by external sources such as OpenAlex and the QS World University Rankings. 
+
+OPAL allows users to explore co-authorship patterns and institutional affiliations through dynamic network visualizations at the author and institutional levels. It offers filtering by publication count, geographical location, and university rankings, while overcoming some key challenges in data such as inconsistent institutional names and limited external metadata. In this project, we processed structured JSON data, enriched the initial data by exploring and selecting the appropriate external data sources, applied fuzzy matching techniques, and designed an approachable user interface using visNetwork library in R.
+
+This final report for the project will include, in detail, the development process of the application, strategies for data integration we employed, the technical architecture, and the challenges encountered during the process of developing OPAL. We also demonstrate how OPAL could contribute to greater transparency in collaboration networks and support WU’s journey to improve its global academic engagement. 
+
+\newpage
+
+# Introduction
+
+## Motivation 
+
+In the highly interconnected and global research landscape, academic institutions can surely benefit from tools that will allow them to visualize and analyze collaboration patterns among researchers. International co-authorship is one of the key drivers for excellence in research, and the institutions that engage actively in global networks are more likely to produce more impactful work than the institutions that don’t. Insights in collaborative research landscape could then support internal coordination, interdisciplinary collaboration, and improve visibility externally. These are all important for sustaining scientific competitiveness and strategic research planning. 
+
+The PURE system at WU Vienna functions as the central research information system in the institution. The system contains structured and reliable metadata on researchers, publication, and affiliations, and it’s very useful for internal documentation and reporting. However, as we learned during our project while looking closely at it, PURE’s existing visualization tools offer limited flexibility, with a room for improvement. While the collaboration network there focuses on internal relations and direct collaborations, it lacks in providing more interactive way to explore networks or benchmarking them internationally. 
+
+To this end, we developed an interactive R Shiny application, OPAL, to enhance WU’s internal data with external sources and provide a more dynamic exploration of institutional and researcher networks. 
+
+## Objectives of OPAL
+
+The key objective of our project was to complement WU’s internal research infrastructure through building a lightweight yet interactive application which would improve the way research collaborations are to be explored and analyzed. Mainly, our project aimed to:
+
+-	Enrich internal PURE data with publicly accessible external data to enhance the scope of collaboration network analysis.
+-	Develop a dynamic, user-friendly visualization tool at both the author and institutional levels.
+-	Offer filtering and customization options that go beyond the outputs of the current PURE system (such as filtering by institutional affiliation, publication count, or global university rankings).
+-	Design a scalable and transparent solution using open-source tools, such as R, Shiny, visNetwork, that can be expanded or adapted by future teams. 
+
+By meeting these objectives and goals, OPAL contributes to modernizing how research data is explored and used at WU Vienna, by moving towards a more interactive, globally minded, and insightful approach. 
+
+## Why OPAL?
+
+We named our application **OPAL** as an acronym for *Overhauled PURE Access Library*. This name reflects the project’s core aim: to upgrade and extend the capabilities of WU’s PURE system by enabling more dynamic access and interactive visualizations. Much like the gemstone opal,the app brings together diverse data sources to create a richer view of research collaborations. The name also captures the idea of clarity and insight, which aligns with our goal of making institutional networks more transparent and accessible.
+
+
+# Data Sources and Integration
+
+The development of our app was centered around combining internal research metadata from WU’s PURE systems with relevant external datasets. This process has required us several phases of exploration, selection, and transformation as we have learned and evaluated the most suitable and feasible sources for enrichment of the initial PURE Data. 
+
+## Internal Data from PURE
+
+The starting point in our project was the structured JSON exports from the PURE system at WU. These included 4 different JSON files:
+
+- **pure_research_output.json**: is the main source of publication metadata, including contributors, publication types, and affiliated institutions
+- **pure_organisations.json**: structured metadata on WU’s organizational units and their UUIDs
+- **pure_journals.json**: contains information about journals, including their titles, ISSNs, publishers, and classification labels.
+- **pure_classification_schemes.json**: taxonomies and classifications used in PURE, useful for parsing subject areas, organizational roles, and name variants
+
+We primarily used the pure_research_output.json and pure_organisations.json within our purposes in this project. The additional data from the other two files was explored but not integrated into our final application dues to limited relevance for network construction.
+
+We filtered and reshaped the data progressively. By extracting authors that are affiliated with WU, we matched them to their respective organizational units and built two main datasets that were the integral backbone for our project. 
+
+-	**author_nodes.csv** and **author_edges.csv** for collaboration analysis
+
+This transformation of the data enabled us the creation of our networks in the OPAL app. To optimize, we removed incomplete entries and reduced unnecessary noise, and kept only the relevant fields for visual exploration. 
+
+## External Sources
+
+To enrich the initial data provided to us from PURE, we explored several external data sources to retrieve institutional affiliations, university rankings, and other metadata about external co-authors. After exploring different options, we selected two primary external data sources. Firstly, we used OpenAlex to identify the institutions and the countries of the authors. Additionally, we used QS World University Rankings to add as a filtering option in our app. Below, we explain what other sources we have explored and why we have come to choose the specific ones to use. 
+
+### Author Affiliation Data
+
+In total, we considered three external research databases to get institutional data and country-level metadata for the authors:
+
+- **ORCID** (orcid.org)
+
+Although ORCID offered structured researcher profiles with persistent identifiers, we could not use it effectively in our project since PURE data doesn’t have ORCID fields for both internal and external authors. Thus, matching through using ORCID was infeasible for our project.
+
+-	**Scopus** (scopus.com)
+
+Scopus offers comprehensive metadata, but access to it is limited by strict API quotas and licensing terms. Thus, the rate limits made it unsuitable for the large-scale data enrichment in our project timeline.
+
+-	**OpenAlex** (openalex.org)
+
+In the end, we selected OpenAlex as our main external research data source because of its accessibility, comparably generous API, and rich metadata on authors, institutions, and affiliations. It made it possible for us to match researchers’ publication titles to those in PURE and extract the associated institutional and country information. 
+
+### University Ranking Data
+
+One of our main goals of this project was to create a visualization that not only shows who has collaborated with whom, but also to see exactly how prominent the institutions that WU works with are. To this end, we have aimed to find a suitable university ranking data to integrate in our app. We looked at three major ranking websites and chose to integrate QS World University Rankings in our project. Our selection criteria included data availability, the relevance of the ranking to our project goals, the feasibility of integration.  
+
+-	**Times Higher Education** (timeshighereducation.com):
+
+Even though THE rankings are highly reputable, this source didn’t offer openly accessible and structured dataset suitable for our use. 
+
+-	**UniRank** (https://www.unirank.org):
+
+While this ranking system offers very large global coverage filtered by continents, it focuses more on web presence and institutional popularity than academic quality, which made it a rather unsuitable choice for our project’s goals.
+
+-	**QS World University Rankings** (https://www.topuniversities.com):
+
+We selected to use QS as our university ranking dataset due to its high credibility and reputation, as well as its accessibly structured data format. It also provided very balanced methodology that accounts for multidimensional attributes, such as academic reputation, employer reputation, and research impact, which made it more aligned with our project goals. 
+
+## Data Enrichment and Matching
+
+We employed an algorithm to better match the authors from OpenAlex to the ones we had in the WU network. To do this, we downloaded all the profiles for a given name, then all the papers for all these profiles, and then checked which profile was linked to the research output with at least one paper. This greatly improved the accuracy of the findings and helped eliminate some uncertainty about the author's profile.
+
+The OpenAlex data was used to identify the institutions of the researchers. This was then used to match these institutions to the ones present in the data set of the QS Ranking, and by extension, match the rankings to the universities from OpenAlex.
+
+This was done with a fuzzy join in R. The accuracy was overall satisfactory but had certain limitations. For example, the University of Salzburg was always matched with the University of Klagenfurt instead. We presume that it occurs because the linguistic similarity of these two is closer than the name for University of Salzburg, which is present in the QS data, that being Paris Lodron Universität Salzburg.
+
+# System Design and Implementation
+
+The OPAL app includes two main parts used for its functionality, mainly dictated by the design of the Shiny library. The server is the part of the app that creates the logic necessary to run it. It includes all the functionality of the drawing of the graphs and the filters employed within the program. The other part of the code is focused on drawing graphical UI elements that allow the user to input the information and view the outputs of the app.
+
+There are also different other sections, mostly tasked with the cleaning and pre-processing of the data and the leaflet initialization necessary for the institutional view. There also exist scripts that were used to download the data from the OpenAlex API. They are not a part of the app, and this data is not redownloaded again every time the app is launched. However, because they were very important in the development, it is important to remark on them
+
+## The creation of nodes and edges
+
+### Initial inspection & design choices
+
+Exploring the JSON – We began by loading a handful of records in an R notebook, printing
+them with str() and jsonlite::prettify(). This revealed two critical facts:
+
+- contributor blocks are heterogeneous – WU staff are wrapped in a person object, externals
+in an externalPerson object;
+- authors can carry multiple organizations, stored as UUIDs in a list.
+
+Identity strategy – To guarantee unique keys across both groups we decided on two prefixes
+right from the start:
+
+- A_ + the internal person UUID for WU staff;
+- EXT_ + the externalPerson UUID for any external contributor.
+
+These IDs flow unchanged through every downstream step (network edges, geocoding, Shiny
+app).
+
+### Organisation lookup
+
+Pure’s organisation tree is five to six levels deep but for collaboration we only cared about the
+institute and the university.
+
+A helper function therefore walks up the .parents chain until it reaches the root node; the
+pair
+
+inst_uuid → (inst_name, root_name)
+
+is cached in a named list.
+
+With that list, the parser can translate any UUID to a human-readable label instantly, without
+repeated joins.
+
+### Parsing contributor blocks
+
+A streaming loop $(purrr::map_dfr)$ reads the pure_research_output.json file and emits one
+tidy row per contributor containing:
+
+- publication UUID
+- first / last name
+- technical author ID (A_… or EXT_…)
+- a list column with all organisation UUIDs linked to that contributor in that paper
+
+External contributors frequently have no organisation attached; those rows are kept but the
+list element is set to NA.
+
+Intermediate sanity checks were added after each 10 000 publications to spot malformed names
+or empty contributor lists early.
+
+### Exploring author × institute combinations
+
+$tidyr::unnest()$ converts the list column into a long form so that every (author, institute) pair
+occupies its own row. A single left-join against the lookup table from the organisation injects
+inst_name and uni_name. At this point the dataframe already contains 90 % of what later
+becomes author_nodes.csv.
+
+### Node construction
+
+Grouping by the technical author ID allows us to:
+
+- count distinct publications (pubs),
+- collect the unique institute names into a semicolon string (institutes),
+- attach the previously determined uni_name.
+
+The display label is simply “First Last”; missing first or last names are replaced by NA to
+avoid malformed labels.
+
+### Edge construction
+For every publication with at least two contributors we generate the complete set of author
+pairs via $combn()$.
+
+Pairs are canonicalised (alphabetically sorted) and then collapsed across the entire corpus,
+summing the number of joint papers into the edge weight. Because internal and external IDs
+are already disjoint (A_ vs EXT_) no further type column is required.
+
+### Quality loops & debugging
+
+During development we repeatedly wrote temporary CSVs and opened them in Excel for spotchecks.
+Three recurring issues surfaced:
+
+1. Duplicate edges – caused by double affiliations of a single person. Solved by canonicalising
+the pair key before the final $group_by()$.
+2. Ghost authors – rows with both first and last name set to NA. They were filtered out
+before node aggregation.
+3. Missing institutes – external authors lacking an organisation UUID; these remain in the
+node list but their institutes field is blank, preventing join failures later.
+
+Progress bars ($progress::progress_bar$) were inserted for long loops, and a lightweight test-set
+(~1000 papers) accelerated iterations before the full run.
+
+### Outputs & reproducibility
+
+The script produces two clean, ready-to-use tables:
+
+- author_nodes_new.csv – one row per distinct contributor with display label, publication
+count, and institute / university information.
+- author_edges_new.csv – one row per co-author pair with the number of shared papers
+as edge weight.
+
+Because every person is addressed through an explicit prefix (A_ for internal staff, EXT_
+for externals) and all organisational labels are resolved in a single, consistent lookup, both
+files can be regenerated at any time from the two original PURE exports without manual
+intervention.
+
+## The script to download OpenAlex data
+
+The first script is used to obtain the author names for the purpose of searching them in the OpenAlex database. This is done as there is no specific identifier in the PURE database linking the researchers to OpenAlex. This will present a problem with duplicate names that will get resolved by matching the researchers' output with the output in PURE.
+
+```{r eval = FALSE}
+external_names <- nodes[grepl("^EXT_", nodes$id),]
+
+author_name <- external_names$label
+
+author_name <- author_name[author_name != "NA NA"]
+
+saveRDS(author_name, file = "author_name.rds")
+```
+
+The main script was a loop that run the logic over 1000 researcher names at a time. This was done in order to limit the possibility of a problem occurring and losing the pulled API data.
+
+The script requires the papers (which are all PURE papers available) and the previously created author_name file.
+
+Then, the url for the API is specified and the vectors used to store downloaded data are initialized.
+
+```{r eval = FALSE}
+library(httr)
+library(jsonlite)
+
+papers <- readRDS("papers.rds")
+author_name <- readRDS("author_name.rds")
+
+author_name <- author_name[1:1000]
+
+search_name <- URLencode(author_name, reserved = TRUE)
+search_url <- paste0("https://api.openalex.org/authors?search=", search_name)
+
+countries <- numeric(length(author_name))
+uni <- numeric(length(author_name))
+
+for (i in 1:length(search_url)) {
+  response <- GET(search_url[i])
+  search_results <- 
+    fromJSON(content(response, as = "text", encoding = "UTF-8"))
+  res <- search_results$results
+  
+  results_for_name <- list()
+  
+  if (is.data.frame(res) && nrow(res) != 0) {
+    for (j in 1:nrow(res)) {
+      results_for_name[[length(results_for_name)+1]] <- 
+        fromJSON(content(GET(res$works_api_url[j]), 
+                         as = "text", encoding = "UTF-8"))$results
+    }
+  } else {
+    results_for_name[[length(results_for_name)+1]] <- NA
+  }
+  
+  for (h in 1:length(results_for_name)) {
+    if(length(res) != 0) {
+      if(length(which(results_for_name[[h]]$title 
+                      %in% papers$title.value)) != 0) {
+        if(length(res$last_known_institutions[[h]]$display_name) != 0) {
+          uni[i] <- (res$last_known_institutions[[h]]$display_name[1])
+          countries[i] <- (res$last_known_institutions[[h]]$country_code[1])
+        }
+        else{
+          uni[i] <- 0
+          countries[i] <- 0
+        }
+        break
+      }
+    }
+  }
+  
+  rm(results_for_name)
+  
+}
+
+downloaded_institutions <- 
+  data.frame(name = author_name, countries = countries, institutions = uni)
+
+saveRDS(downloaded_institutions, file = "downloaded_institutions_1_100_test.rds")
+```
+
+To break down the logic of the main loop, the specific sub-loops will be explained:
+
+```{r eval = FALSE}
+response <- GET(search_url[i])
+search_results <- fromJSON(content(response, as = "text", encoding = "UTF-8"))
+res <- search_results$results
+```
+
+This chunk is responsible for the download of all profiles on OpenAlex that match the provided name. The result for this is a dataframe with the nrow equal to the number of profiles retrieved.
+
+```{r eval = FALSE}
+  results_for_name <- list()
+  if (is.data.frame(res) && nrow(res) != 0) {
+    for (j in 1:nrow(res)) {
+      results_for_name[[length(results_for_name)+1]] <- 
+        fromJSON(content(GET(res$works_api_url[j]), 
+                         as = "text", encoding = "UTF-8"))$results
+    }
+  } else {
+    results_for_name[[length(results_for_name)+1]] <- NA
+  }
+```
+
+The next chunk is in charge of retrieving all articles available on OpenAlex written by all profiles that were retrieved in the previous step. The output is in the form of a list.
+
+```{r eval = FALSE}
+  for (h in 1:length(results_for_name)) {
+    if(length(res) != 0) {
+      if(length(which(results_for_name[[h]]$title 
+                      %in% papers$title.value)) != 0) {
+        if(length(res$last_known_institutions[[h]]$display_name) != 0) {
+          uni[i] <- (res$last_known_institutions[[h]]$display_name[1])
+          countries[i] <- (res$last_known_institutions[[h]]$country_code[1])
+        }
+        else{
+          uni[i] <- 0
+          countries[i] <- 0
+        }
+        break
+      }
+    }
+  }
+```
+
+The final loop is responsible for actually finding the institution of the researcher. It first runs through all of the outputs for each profile. It searches for the first profile index that contains an output that is available in the PURE data set. This is a way to ensure that the researcher is question is the specific researcher contained in PURE and not just a person with the same name. Then, after this has been identified, it retrieves the information about the institution and the country of the chosen profile and that concludes the entire step of the loop. The same process was then repeated for all available names.
+
+After data, the vectors are merged into a dataframe and then saved in a .RDS file for further use.
+
+## Main app
+
+### Libraries and functions
+
+```{r warning=FALSE, message=FALSE}
+library(shiny)
+library(visNetwork)
+library(leaflet)
+library(this.path)
+library(dplyr)
+library(scales)
+library(tidygeocoder)
+library(countrycode)
+library(fuzzyjoin)
+
+setwd(this.dir())
+`%nin%` <- Negate(`%in%`)
+
+clean_name <- function(x) {
+  x <- tolower(x)
+  x <- gsub("[^a-z0-9\\s-]", "", x)
+  x <- gsub("\\s+", " ", x)
+  x <- trimws(x)               
+  return(x)
+}
+```
+
+The file begins by calling all the necessary libraries and defining two functions. *%nin%* is simply a negation of the %in% function present in base R. This is only used once in the file, but was defined for ease of reading. *clean_name()* is a function used for the cleaning of university names. It is used in the fuzzy joining of the OpenAlex universities to the ones from QS Ranking.
+
+### Settings for leaflet
+
+```{r}
+# ----------------------------------------------------------------------------
+# 0) Settings
+# ----------------------------------------------------------------------------
+cache_file  <- "inst_coords_cache.rds"
+vienna_name <- "Vienna University of Economics and Business"
+```
+
+### Loading and preparing the data
+
+This section is focused on loading the data and merging it in order to pass it into the server and app logic. This mostly focuses on the edges and nodes, created in a section above, and on the institution information downloaded from OpenAlex and QS.
+
+```{r}
+# ----------------------------------------------------------------------------
+# 1) Load & prepare data
+# ----------------------------------------------------------------------------
+nodes        <- read.csv2("author_nodes_new.csv", stringsAsFactors = FALSE)
+edges        <- read.csv2("author_edges_new.csv",    stringsAsFactors = FALSE)
+institutions <- readRDS("downloaded_institutions_combined.rds")
+
+qsranking <- read.csv("qsranking.csv")
+qsranking <- subset(qsranking, select = c(index, rank_2025, rank_2024, institution_name, location))
+qsranking$location <- countrycode(qsranking$location, origin = "country.name.en", destination = "iso2c")
+colnames(qsranking) <- c('index', 'rank_2025', 'rank_2024', 'institutions', 'location')
+colnames(edges)  <- c("from","to","freq")
+```
+
+The data is loaded and preprocessed. For the *qsranking* file only a few columns are chosen. The country names are encoded into iso2c (eg. Austria = AT) to make the use with the OpenAlex more comfortable. The columns are also renamed to make the structure more standardized.
+
+```{r}
+nodes$author_id <- as.character(nodes$author_id)
+edges$from <- as.character(edges$from)
+edges$to   <- as.character(edges$to)
+```
+
+The *as.character()* function is used in order to ensure these variables are strings, this is essential to the functioning of the app.
+
+```{r}
+# attach external EXT_ IDs to institution records
+external_ids    <- nodes[grepl("^EXT_", nodes$id) & nodes$label!="NA NA", ]$id
+institutions$id <- external_ids
+```
+
+IDs are reattached to the corresponding names in the *institutions* dataframe.
+
+```{r}
+# build internal “WU” entries
+internal_names <- nodes[grepl("^A_", nodes$id), ]$label
+internal_ids   <- nodes[grepl("^A_", nodes$id), ]$author_id
+internal_institutions <- data.frame(
+  label        = internal_names,
+  countries    = "AT",
+  institutions = "Vienna University of Economics and Business",
+  id           = internal_ids,
+  stringsAsFactors = FALSE
+)
+```
+
+A dataframe is created for the internal authors. This is necessary as an initial step to attach the data on institutions to the nodes dataframe.
+
+```{r, warning=FALSE}
+# dedupe legacy institutions by (id,label)
+institutions <- institutions %>%
+  rename(label = name) %>%
+  distinct(id, label, .keep_all = TRUE)
+
+final_institutions <- bind_rows(internal_institutions, institutions) %>%
+  distinct(id, label, .keep_all = TRUE)
+```
+
+The data is merged and filtered to only keep distinct IDs. This is not only done in order to avoid duplicates, but is necessary make the app run, as visNerwork does not accept any duplicate IDs.
+
+```{r, warning=FALSE}
+# fix Unknown fields
+final_institutions$countries    [final_institutions$countries    == 0] <- "Unknown"
+final_institutions$institutions [final_institutions$institutions == 0] <- "Unknown"
+colnames(final_institutions) <- c("label","countries","institutions","id")
+
+# merge nodes → authors + institution info
+nodes <- nodes %>%
+  filter(label!="NA NA") %>%
+  inner_join(final_institutions,
+             by = c("id","label"),
+             relationship = "many-to-many") %>%
+  distinct(author_id, .keep_all = TRUE)
+```
+
+The zeros in the institutions dataframe are replaced with "Unknown". After that, the dataframe is merged with the nodes using an inner join along the ID and name.
+
+```{r, warning=FALSE}
+nodes$continent <- countrycode(sourcevar = nodes[, "countries"],
+                               origin = "iso2c",
+                               destination = "continent")
+
+nodes$continent[which(is.na(nodes$continent))] <- "Unknown"
+```
+
+This chunk uses the *countrycode* library to add continents to the nodes based on the country that was added with the merge.
+
+```{r}
+#qs implementation
+nodes_qsranking <- subset(nodes, select = c(id, institutions, countries))
+
+nodes_qsranking$institutions <- clean_name(nodes_qsranking$institutions)
+qsranking$institutions <- clean_name(qsranking$institutions)
+
+result <- stringdist_left_join(nodes_qsranking, qsranking, by = "institutions", method = "jw", max_dist = 0.2, distance_col='dist')
+result <- result %>% group_by(id) %>% filter(countries == location | countries == "Unknown") %>% slice(which.min(dist))
+rm(nodes_qsranking)
+
+#cleaning qsranking results
+result$rank_2025 <- gsub('[+]', '', result$rank_2025)
+result$rank_2024 <- gsub('[+]', '', result$rank_2024)
+result$rank_2025_num <- as.numeric(sapply(strsplit(result$rank_2025, c('-')), "[[", 1))
+result$rank_2024_num <- as.numeric(sapply(result$rank_2024, function(x) {
+  strsplit(x, '-')[[1]][1]
+}))
+```
+
+This chunk shows how we use fuzzy join to match the names of the institutions from OpenAlex and QS. The basic idea is that the names of universities in both cases are cleaned and then a *jw* algorithm is run in order to check the distance between the strings. We only choose institutions if their countries match or are unknown and if the distance is less or equal to 0.2.
+
+Lastly, we convert the rankings from strings to numeric.
+
+```{r}
+#merging the cleaned results with nodes
+result$rank <- (result$rank_2025_num + result$rank_2024_num)/2
+result <- result[,c(1,12)]
+nodes <- left_join(nodes, result, by = 'id')
+```
+
+The rank is calculated as the average of the ranks from 2025 and 2024. Then, the ranks are added to the nodes using a left join.
+
+```{r}
+# collapse duplicate edges
+edges <- edges %>%
+  rowwise() %>%
+  mutate(pair = paste(sort(c(from,to)), collapse=":")) %>%
+  ungroup() %>%
+  group_by(pair) %>%
+  summarise(
+    from = strsplit(pair,":")[[1]][1],
+    to   = strsplit(pair,":")[[1]][2],
+    freq = sum(freq),
+    .groups = "drop"
+)
+```
+
+The edges are collapsed if they show connections between the same IDs and the frequencies are summed when this happens. This is not needed, but makes the graphs a lot more readable.
+
+```{r}
+# build author tooltip
+nodes$title <- paste0(
+  "Name: ", nodes$label,
+  "<br>Publications: ", nodes$pubs,
+  "<br>Country: ", nodes$countries,
+  "<br>Continent: ", nodes$continent,
+  "<br>Institution: ", nodes$institutions,
+  "<br>Rank: ", nodes$rank
+)
+```
+
+The tooltip for the author nodes is created from the variables of the *nodes* dataframe.
+
+### User Interface
+
+```{r}
+# ----------------------------------------------------------------------------
+# 3) UI
+# ----------------------------------------------------------------------------
+ui <- fluidPage(
+  titlePanel(div(img(src="logo.png"), "Welcome to OPAL")),
+  sidebarLayout(
+    sidebarPanel(
+      radioButtons("view_mode","Top-level view:",
+                   choices = c("Author view","Institution view"),
+                   inline  = TRUE),
+      uiOutput("edge_buttons"),
+      uiOutput("dynamic_node_picker"),
+      uiOutput("dynamic_net_switch"),
+      uiOutput("inst_selector"),
+      uiOutput("dynamic_slider"),
+      uiOutput("rank_slider"),
+      uiOutput("cont_checkbox")
+    ),
+    mainPanel(
+      conditionalPanel("input.view_mode=='Author view'",
+                       visNetworkOutput("filteredGraph",height="550px")),
+      conditionalPanel("input.view_mode=='Institution view'",
+                       leafletOutput("inst_map",height="550px"))
+    )
+  )
+)
+
+```
+
+The UI will not be discussed here as most of its features are store in dynamic UI elements defined in the server. The code just serves as a view as to how the app is structured.
+
+### Server
+
+```{r}
+# ----------------------------------------------------------------------------
+# 4) Server
+# ----------------------------------------------------------------------------
+server <- function(input, output, session) {}
+```
+
+All following code chunks should be in this server function, but for the sake of readability they were separated.
+
+```{r eval = FALSE}
+# -- edge drawing logic selection (connected vs. further) --
+output$edge_buttons <- renderUI({
+  req(input$view_mode=="Author view", input$selected_node)
+  radioButtons("edge_mode","Edge-drawing logic:",
+                 choices=c("Simple connections","Further connections"),
+                 selected="Simple connections")
+})
+```
+
+The first element is the output element that creates the input for the simple/further connections.
+
+```{r eval = FALSE}
+  # -- dynamic author vs. institution selector --
+  output$dynamic_node_picker <- renderUI({
+    if (input$view_mode=="Author view") {
+      selectInput("selected_node","Select an author:",
+                  choices = nodes$label, selected = nodes$label[1])
+    } else {
+      # only show institutions with coords
+      avail <- intersect(
+        unique(nodes$institutions),
+        inst_coord %>% filter(!is.na(latitude),!is.na(longitude)) %>% pull(address)
+      )
+      selectizeInput("selected_inst","Select an institution:",
+                     choices = sort(avail),
+                     selected = sort(avail)[1],
+                     options = list(server=TRUE))
+    }
+  })
+```
+
+This element is controlled by the input of the top view. If we choose the top view of authors, this will create the *selected_node* input, that is used to display the networks of different researchers. If the top view is institutions, this will create the *selected_inst* input, which is used to select institutions to show their connections on the map.
+
+```{r eval = FALSE}
+  output$cont_checkbox <- renderUI({
+    req(input$view_mode=="Author view", input$selected_node)
+    checkboxGroupInput(
+      "cont_filter", "Show continents:",
+      choices  = sort(unique(nodes$continent)),
+      selected = sort(unique(nodes$continent))
+    )
+  })
+```
+
+This creates the filter that allows to show nodes by continents. It requires the author view to be selected in order to show and function.
+
+```{r eval = FALSE}
+  # -- institution rank filter (author view only) --
+  output$rank_slider <- renderUI({
+    req(input$view_mode=="Author view", input$selected_node)
+    sliderInput("rank_filter", "Max Rank:",
+                min = min(na.omit(nodes$rank)), max = max(na.omit(nodes$rank)),
+                value = max(na.omit(nodes$rank)))
+  })
+```
+
+This creates the filter that allows to show nodes by institution rank. It will completely ignore and not filter nodes without institution rank. It requires the author view to be selected in order to show and function.
+
+```{r eval = FALSE}
+  # -- show‐institutes filter (author view only) --
+  output$inst_selector <- renderUI({
+    req(input$view_mode=="Author view", input$selected_node)
+    ego_id <- nodes$author_id[nodes$label==input$selected_node]
+    ce     <- subset(edges, from==ego_id|to==ego_id)
+    ids    <- unique(c(ce$from,ce$to,ego_id))
+    insts  <- nodes %>% filter(id%in%ids) %>% pull(institutions) %>% unique()
+    checkboxGroupInput("inst_filter","Show institutions:",
+                       choices=insts, selected=insts)
+  })
+```
+
+This creates the filter that allows for the display of nodes based on the institution. It detects and draws the list of institutions dynamically to only those that are available on the drawn network. It requires the author view to be selected in order to show and function.
+
+```{r eval = FALSE}
+  # -- author‐centric network switch --
+  output$dynamic_net_switch <- renderUI({
+    req(input$view_mode=="Author view")
+    radioButtons("net_mode","Author-centric network:",
+                 choices=c("People network","Institution network"),
+                 selected="People network")
+  })
+```
+
+This output creates an input element if the top view of authors is selected. It allows for the selection of a network showing the network of either authors or institutions connected to the selected nodes. The logic in how this is achieved is explained below.
+
+```{r eval = FALSE}
+  # -- slider: pubs vs. collabs --
+  output$dynamic_slider <- renderUI({
+    if (input$view_mode=="Author view") {
+      sliderInput("pubs_filter","Max Publications:",
+                  min=min(nodes$pubs),
+                  max=max(nodes$pubs),
+                  value=max(nodes$pubs),
+                  step=1)
+    } else {
+      req(input$selected_inst)
+      maxc <- inst_edges %>%
+        filter(inst_from==input$selected_inst|inst_to==input$selected_inst) %>%
+        pull(freq) %>% max(na.rm=TRUE)
+      sliderInput("collab","Max Collaborations:",
+                  min=1, max=maxc, value=maxc, step=1)
+    }
+  })
+```
+
+The above chunk shows the pubs/collabs slider. Based on the selected top view, it will change the slider to either show author publications or institution collaborations.
+
+```{r eval = FALSE}
+# --- render author view network ---
+  output$filteredGraph <- renderVisNetwork({
+    req(input$view_mode=="Author view", input$selected_node)
+    
+    # extract ego‐network for the selected author
+    ego_id <- nodes$author_id[nodes$label==input$selected_node]
+    ce  <- subset(edges, from==ego_id|to==ego_id)
+    ids <- unique(c(ce$from,ce$to,ego_id))
+    cn <- subset(nodes, id %in% ids)
+    
+    pn <- subset(cn, id == ego_id)
+    fn <- subset(cn, id != ego_id)
+    
+    fur_e <- subset(edges,
+                    (from %in% fn$id | to %in% fn$id) &
+                    !(from == ego_id | to == ego_id)
+    )
+    
+    if(input$edge_mode =="Simple connections") {
+      ae <- ce
+    } else if (input$edge_mode =="Further connections") {
+      ae <- (rbind(ce, fur_e)) 
+    }
+    
+    
+    fn  <- fn %>% filter(institutions %in% input$inst_filter)
+    fe  <- subset(ae, from%in%fn$id & to%in%fn$id)
+    
+    if (input$net_mode=="Institution network") {
+      # keep one central node + one per partner institution
+      main_node <- pn
+      
+      fn <- fn %>% filter(pubs <= input$pubs_filter)
+      fn <- fn %>% filter(continent %in% input$cont_filter)
+      fn <- fn %>% filter(rank <= input$rank_filter | is.na(rank))
+      
+      inst_nodes <- fn[fn$id!=ego_id,] %>%
+        distinct(institutions,.keep_all=TRUE) %>%
+        mutate(
+          id    = paste0("inst__",institutions),
+          label = institutions,
+          title = paste0("Institution: ",institutions)
+        )
+      fn <- bind_rows(main_node,inst_nodes)
+      fe <- inst_nodes %>% transmute(from=ego_id,to=id,freq=1)
+    } else if (input$net_mode=="People network") {
+      main_node <- pn
+      
+      fn <- fn %>% filter(pubs <= input$pubs_filter)
+      fn <- fn %>% filter(continent %in% input$cont_filter)
+      fn <- fn %>% filter(rank <= input$rank_filter | is.na(rank))
+      
+      fn <- bind_rows(main_node,fn)
+      fe <- ae
+    }
+    
+    if (nrow(fe)>0) {
+      fe <- fe %>%
+        mutate(
+          width = scales::rescale(freq,to=c(1,10)),
+          title = paste("Collaborations:",freq)
+        )
+    }
+    
+    visNetwork(fn,fe) %>%
+      visLayout(randomSeed=1) %>%
+      visEdges(smooth=TRUE) %>%
+      visPhysics(
+        solver="forceAtlas2Based",
+        forceAtlas2Based=list(
+          gravitationalConstant=-60,
+          centralGravity=0.015,
+          springLength=230,
+          springConstant=0.08
+        ),
+        stabilization=FALSE
+      ) %>%
+      visEvents(stabilizationIterationsDone=
+                  "function(){ this.fit({animation:false}); }")
+  })
+```
+
+And this chunk is the most important of the entire app. It is fully responsible for the creation of the graph given just the edges and nodes and all other user inputs like filters.
+
+It first creates the ego_id, which is the ID of the selected node. Then using that, it finds all edges connected to the ego_id and by extension all nodes that are connected to the selected node. These nodes are the *connected nodes* or *cn* for short. Then it initializes the *primary node (pn),* and the *filtered nodes (fn).* Lastly, it creates the *further edges (fur_e),* based on the edges connecting the edges that connect all drawn nodes except for the *primary node*.
+
+The first if-statement sees if the input is either only simple or further connections and uses either only *connected edges* or the bind of *connected edges* and *further edges*. Then it filters the *filtered nodes* by the institution filter and initializes *filtered edges*.
+
+The second if-statement is tasked with dealing with the selection of either the people network or the institution network. If the institution view was chosen by the user, it will begin by filtering *filtered nodes* based on user input. Then it creates the inst_nodes by collapsing all institutions assigned to authors, keeping only distinct ones. After that, it binds them to the primary nodes. If the author view was chosen, it will filter the nodes the same way it did in the previous step. After the filter, it will bind the *primary node* to the *filtered nodes.*
+
+The last if-statement checks if any edges are drawn and if yes, then it rescales them to have a more sensible width.
+
+The last part is drawing the graph. It uses some parameters to make the graph look more stable and limit the physics to allow for better performance.
+
+```{r eval = FALSE}
+  # --- render institution view map ---
+  output$inst_map <- renderLeaflet({
+    req(input$view_mode=="Institution view", input$selected_inst)
+    centre <- input$selected_inst
+    
+    link_tbl <- inst_edges %>%
+      filter((inst_from==centre|inst_to==centre) & freq<=input$collab) %>%
+      mutate(partner=ifelse(inst_from==centre,inst_to,inst_from))
+    
+    # on‐the‐fly geocode any new partners
+    all_needed <- unique(c(centre,link_tbl$partner))
+    to_geo    <- setdiff(all_needed,
+                         inst_coord %>% filter(!is.na(latitude)) %>% pull(address))
+    if (length(to_geo)>0) {
+      newc <- geocode(
+        data.frame(address=to_geo,stringsAsFactors=FALSE),
+        address,method="osm",lat="latitude",long="longitude"
+      )
+      inst_coord <<- bind_rows(inst_coord,newc) %>%
+        distinct(address,.keep_all=TRUE)
+      saveRDS(inst_coord,cache_file)
+    }
+    
+    pts         <- inst_coord %>%
+      filter(address%in%all_needed & !is.na(latitude))
+    centre_pt   <- pts %>% filter(address==centre)
+    partner_pts <- pts %>% filter(address!=centre)
+    vienna_pt   <- partner_pts %>% filter(address==vienna_name)
+    other_pts   <- partner_pts %>% filter(address!=vienna_name)
+    
+    m <- leaflet() %>% addTiles()
+    
+    # center marker
+    if (nrow(centre_pt)>0) {
+      m <- m %>% addCircleMarkers(
+        lng=centre_pt$longitude,lat=centre_pt$latitude,
+        popup=centre,radius=10,color="red",fillOpacity=0.9
+      )
+    }
+    
+    # other partners
+    if (nrow(other_pts)>0) {
+      m <- m %>% addCircleMarkers(
+        lng=other_pts$longitude,lat=other_pts$latitude,
+        popup=paste0(
+          other_pts$address,"<br>Collaborations: ",
+          link_tbl$freq[match(other_pts$address,link_tbl$partner)]
+        ),
+        radius=6,color="steelblue",fillOpacity=0.7
+      )
+    }
+    
+    # Vienna highlight
+    if (nrow(vienna_pt)>0) {
+      m <- m %>% addCircleMarkers(
+        lng=vienna_pt$longitude,lat=vienna_pt$latitude,
+        popup=paste0(
+          vienna_name,"<br>Collaborations: ",
+          link_tbl$freq[match(vienna_name,link_tbl$partner)]
+        ),
+        radius=8,color="orange",fillOpacity=0.9
+      )
+    }
+    
+    # draw lines
+    if (nrow(centre_pt)>0 && nrow(partner_pts)>0) {
+      for (i in seq_len(nrow(partner_pts))) {
+        p <- partner_pts$address[i]
+        col <- if (p==vienna_name) "orange" else "gray"
+        w   <- if (p==vienna_name) 3 else 1
+        op  <- if (p==vienna_name) 0.8 else 0.6
+        m <- m %>% addPolylines(
+          lng=c(centre_pt$longitude,partner_pts$longitude[i]),
+          lat=c(centre_pt$latitude,partner_pts$latitude[i]),
+          color=col,weight=w,opacity=op
+        )
+      }
+    }
+    
+    # auto-zoom
+    if (nrow(centre_pt)>0 && nrow(partner_pts)>0) {
+      all_lng <- c(centre_pt$longitude,partner_pts$longitude)
+      all_lat <- c(centre_pt$latitude, partner_pts$latitude)
+      m <- m %>% fitBounds(
+        lng1=min(all_lng),lat1=min(all_lat),
+        lng2=max(all_lng),lat2=max(all_lat)
+      )
+    } else if (nrow(centre_pt)>0) {
+      m <- m %>% setView(
+        lng=centre_pt$longitude,lat=centre_pt$latitude,zoom=4
+      )
+    } else if (nrow(partner_pts)>0) {
+      m <- m %>% fitBounds(
+        lng1=min(partner_pts$longitude),
+        lat1=min(partner_pts$latitude),
+        lng2=max(partner_pts$longitude),
+        lat2=max(partner_pts$latitude)
+      )
+    }
+    
+    m
+  })
+```
+
+# Challenges and Limitations
+
+We have encountered a range of challenges while working on this project, and in this section, we will address the primary ones we have faced and mention the limitations of our app. 
+
+1.	**The limited coverage in OpenAlex**: 
+The OpenAlex database does not contain a lot of the researchers present in the PURE database. Around 60% of all PURE authors could not be found on OpenAlex or had no affiliation with any institution on OpenAlex. This influenced the completeness of both the author and institutional level networks. 
+
+2.	**Fuzzy Matching and Institutional ambiguity**:
+Fuzzy join and the different algorithms of it do face an issue when matching some of the university names. Overall, this is not a huge problem but can be seen as a limitation and maybe a different approach to the pre-processing of the strings.
+
+3.	**API Constraints and Missed Opportunities with Scopus**:
+The OpenAlex API issues could have been amended if the Scopus API was used. Upon manual inspection, Scopus does seem to have better results in at least a few cases. However, the free Scopus API key is very restrictive and would make the creation of the dataset too difficult. Institutional access to Scopus could improve the results in future iterations.
+
+4.	**Performance issues in Shiny**:
+The R Shiny environment struggles with some high-intensity operations and makes the UI stutter and slow down. Particularly, the use of VisNetwork package applies a physics simulation by default, which could become performance intensive as the network size increases. For us, this led to occasional freezing of the app in a case of highly connected nodes creating UI lags.  As a result, we have chosen not to include the highly connected individuals and institutions in our demo, as they could overload the app. 
+
+5.	**No internal collaboration view or Sub-Organization Centering**:
+As of now, OPAL focuses mainly on showing external collaborations of WU researchers. There is no dedicated view to visualize and explore the internal collaboration patterns within WU, such as connections between sub-organizations and departments. As suggested by our supervisor, implementing a sub-org-centered or “outside-in” view could largely improve OPAL’s usefulness.
+
+# Future Work
+
+While our work with building up OPAL provided a functional and insightful prototype for exploring research collaborations at WU, there are several opportunities to improve it further both in technical and user-experience aspects. In this section, we will divide these potential improvements in two parts. First, we discuss the enhancements based on our internal team goals we have agreed on during our work. Next, we also incorporate the features and improvements suggested by our supervisor after the final presentation. 
+
+## Internally Proposed Improvements
+
+-	**Gain Access to the Scopus API on a better license**: 
+Doing this would significantly increase data coverage and retrieval accuracy and will improve speed and scalability of the data enrichment.
+
+-	**Develop a way to match names which have no information online to some institution**: 
+One option could include using adjacency to other co-authors with known affiliations to infer missing information.
+
+-	**Enrich PURE dataset with ORCID identifiers where possible**:
+Linking author entries to ORCID would help improve consistency and match quality. 
+
+-	**Develop more useful filters to gain required insights more easily**:
+This would allow users to extract meaningful collaboration patterns more easily. 
+
+-	**Look into displaying statistics on collaboration in a mode accessible manner**:
+Adding simple numeric insights, such as number of publications, most collaborative authors, in a more accessible format to the user could enhance their experience using the app greatly.
+
+-	**Explore the possibility of hosting or different implementation**:
+This could improve performance, particularly for large datasets.
+
+-	**Improve the user interface and experience (UI/UX) where possible**:
+Increased UI/UX through smoother navigation, clearer layout, and more responsiveness would make the app much more approachable for users with varying backgrounds.
+
+## Supervisor Feedback and Proposed Features
+
+-	**Sub-organization-centered view**:
+Aggregation at WU sub-organization level (e.g., departments or institutes).
+
+-	**Internal collaboration view**:
+Within-WU collaboration view by sub-organization.
+
+-	**“Outside-in” visualization**:
+External institutions in the center, showing who/which sub-organization has collaborated from WU with which university or country. 
+
+-	**Fallback mechanism for incomplete data**:
+Think of how to “fallback” to UniRank when QS is not available to avoid losing any connections.
+
+-	**Scalability improvements for highly connected entities**:
+Pre-materialize certain values/aggregations for people or institutions with many connections.
+
+-	**Topic-based filters and subject specific rankings**:
+In collaboration with PURE 2 group, explore into adding QS ranking per topics/programs and adding research topics.
+
+
+# Conclusion
+
+Our project working on OPAL has aimed to improve WU's ability to understand and visualize its research collaboration network better by integrating both internal and externall data sources into an interactive R Shiny application. We combined structured data from the PURE system with external data from OpenAlex and QS World University Rankings, and developed a prototype that has potential to offer fitlerable, dynamic, and intuitive network visualizations in both author and institutional levels. 
+
+During the process of building OPAL, our team has faced several challenges, such as inconsistencies in data, external data coverage limiations, and performance issues in R Shiny. Still, we have tackled these challenges to the best of our abilities for the given project timeframe and have successfully built an adabtable and buildable application that potentially lays the groundwork for future improvements and iterations in a larger institutional use at WU Vienna. 
+
+We believe that OPAL shows promising potential for future developments, such as incorporating internal collaboration views, improvements in matching, larger filtering options, and better user interface and experience. With these potential enhancements, OPAL could become a strong tool for research planning, collaboration mapping, and decision making at the university. 
+
+This project has taught us many meaningful lessons and provided valuable insights into technical aspects of data visualization in academia and the practical considerations of working with available research databases. We hope and believe that OPAL could inspire WU and other institutions in seeking better understanding of their collaborative research landscape and help steer them into a direction of more visible, transparent and globally focused future of academic research collaboration. 
+
+
+
