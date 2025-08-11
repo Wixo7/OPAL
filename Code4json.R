@@ -1,20 +1,16 @@
 ###############################################################################
-# 0) Pakete -------------------------------------------------------------------
+# 0) Libraries ----------------------------------------------------------------
 ###############################################################################
 pkgs <- c("jsonlite", "purrr", "dplyr", "tidyr", "stringr", "tibble", "readr")
 install <- setdiff(pkgs, rownames(installed.packages()))
 if (length(install)) install.packages(install)
 invisible(lapply(pkgs, library, character.only = TRUE))
-
-###############################################################################
-# 1) Pfade --------------------------------------------------------------------
-###############################################################################
 base <- "C:/Users/Julius/Desktop/OPAL/Data integration/Data from jupyter"
 org_file <- file.path(base, "pure_organisations.json")
 ro_file  <- file.path(base, "pure_research_output.json")
 
 ###############################################################################
-# 2) Organisationen (uuid → Name) ---------------------------------------------
+# 2) Organisations (uuid → Name) ----------------------------------------------
 ###############################################################################
 org_tbl <- fromJSON(org_file, simplifyVector = FALSE)$items |>
   map_dfr(\(o) {
@@ -25,7 +21,7 @@ org_tbl <- fromJSON(org_file, simplifyVector = FALSE)$items |>
   })
 
 ###############################################################################
-# 3) Research‑Output  ---------------------------------------------------------
+# 3) Research Output  ---------------------------------------------------------
 ###############################################################################
 ro_items <- fromJSON(ro_file, simplifyVector = FALSE)$items
 
@@ -52,7 +48,8 @@ author_long <- map_dfr(ro_items, function(item) {
 })
 
 ###############################################################################
-# 4) Author‑Nodes -------------------------------------------------------------
+# 4) Author Nodes -------------------------------------------------------------
+###############################################################################
 author_nodes <- author_long |>
   group_by(author_id, first_name, last_name) |>
   summarise(
@@ -70,7 +67,8 @@ author_nodes <- author_long |>
          institutes, publications)
 
 ###############################################################################
-# 5) Author‑Edges  (Quelle–Ziel + Gewicht) ------------------------------------
+# 5) Author Edges -------------------------------------------------------------
+###############################################################################
 author_edges <- author_long |>
   distinct(pub_id, author_id) |>
   group_by(pub_id) |>
@@ -83,8 +81,8 @@ author_edges <- author_long |>
   count(source, target, name = "weight")
 
 ###############################################################################
-# 6) Institute‑Edges ----------------------------------------------------------
-#   (jede Publikation → Kombis aller beteiligten Institute)
+# 6) Institute Edges ----------------------------------------------------------
+###############################################################################
 inst_edges <- author_long |>
   select(pub_id, inst_ids) |>
   unnest(inst_ids) |>
@@ -100,20 +98,15 @@ inst_edges <- author_long |>
   filter(source != target)
 
 ###############################################################################
-# 7) Institute‑Nodes  (nur Institute, die auch in inst_edges vorkommen)
+# 7) Institute‑Node
 ###############################################################################
 inst_nodes <- org_tbl |>
   semi_join(inst_edges, by = c("inst_id" = "source"))  # jetzt korrekt
 
 
-###############################################################################
-# ── Autor‑Netz  -------------------------------------------------------------
 readr::write_csv2(author_nodes, file.path(base, "author_nodes.csv"))
 readr::write_csv2(author_edges, file.path(base, "author_edges.csv"))
 
-# ── Instituts‑Netz ----------------------------------------------------------
 readr::write_csv2(inst_nodes,   file.path(base, "institute_nodes.csv"))
 readr::write_csv2(inst_edges,   file.path(base, "institute_edges.csv"))
 
-
-message("Vier CSV‑Dateien erstellt – bereit fürs Netzwerk‑Tool!")
